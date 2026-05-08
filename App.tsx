@@ -23,7 +23,6 @@ function Repro() {
 
   const [email, setEmail] = useState(`repro-${Date.now()}@example.com`);
   const [password, setPassword] = useState("Reproduction1234!");
-  const [name, setName] = useState("Repro User");
   const [status, setStatus] = useState<string>("idle");
   const [error, setError] = useState<string | null>(null);
   const [autoTriggered, setAutoTriggered] = useState(false);
@@ -48,7 +47,7 @@ function Repro() {
     setStatus("signing up");
     setError(null);
     try {
-      const res = await authClient.signUp.email({ email, password, name });
+      const res = await authClient.signUp.email({ email, password, name: "Repro User" });
       if (res.error) throw new Error(res.error.message);
       setStatus("signed up");
     } catch (e) {
@@ -92,13 +91,13 @@ function Repro() {
     if (!isAuthenticated) {
       return {
         label: "BRIDGE STUCK",
-        sub: "Better Auth has a session but useConvexAuth never settles. Bug repros.",
+        sub: "Better Auth has a session but useConvexAuth never settles",
         bg: "#c0392b",
       };
     }
     return {
       label: "BRIDGE WORKING",
-      sub: "Session and Convex auth both live. Fix applied.",
+      sub: "Session and Convex auth both live",
       bg: "#27ae60",
     };
   })();
@@ -115,7 +114,10 @@ function Repro() {
       <View style={styles.box}>
         <Text style={styles.h2}>useConvexAuth</Text>
         <Text style={styles.row}>
-          isAuthenticated: <Text style={styles.value}>{String(isAuthenticated)}</Text>
+          isAuthenticated:{" "}
+          <Text style={[styles.authValue, { color: isAuthenticated ? "#27ae60" : "#c0392b" }]}>
+            {String(isAuthenticated)}
+          </Text>
         </Text>
         <Text style={styles.row}>
           isLoading: <Text style={styles.value}>{String(isLoading)}</Text>
@@ -163,14 +165,6 @@ function Repro() {
           value={password}
           onChangeText={setPassword}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="name (sign up)"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={name}
-          onChangeText={setName}
-        />
       </View>
 
       <View style={styles.actions}>
@@ -196,6 +190,7 @@ const styles = StyleSheet.create({
   banner: { padding: 16, borderRadius: 10, gap: 4 },
   bannerLabel: { color: "#fff", fontSize: 20, fontWeight: "800", letterSpacing: 0.5 },
   bannerSub: { color: "#fff", fontSize: 13, opacity: 0.9 },
+  authValue: { fontSize: 18, fontWeight: "900" },
   h2: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
   box: { padding: 12, borderWidth: 1, borderColor: "#ddd", borderRadius: 8, gap: 4 },
   row: { fontSize: 14, fontFamily: "Menlo" },

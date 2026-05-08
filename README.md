@@ -4,6 +4,14 @@ Minimal Expo app that reproduces the `useConvexAuth().isAuthenticated` race in `
 
 Filed as [`get-convex/better-auth#368`](https://github.com/get-convex/better-auth/pull/368). Root cause: [`expo/expo#45345`](https://github.com/expo/expo/pull/45345) dropped `@babel/plugin-transform-async-to-generator` from the Hermes V1 preset, which had been hiding a microtask race in the bridge's `fetchAccessToken`.
 
+## What it looks like
+
+| Vanilla `0.12.2` (broken) | Patched build (fixed) |
+|---|---|
+| ![broken](screenshots/broken.png) | ![fixed](screenshots/fixed.png) |
+
+Same app, same Convex deployment, same Better Auth session. Only the `@convex-dev/better-auth` version in `package.json` differs.
+
 ## Symptom
 
 After any auth state change (sign in, sign up, sign out):
@@ -24,13 +32,13 @@ npx convex dev      # one terminal, leave running
 npm run ios         # another terminal
 ```
 
-The app auto-signs-up on launch with `repro-${Date.now()}@example.com`. Watch the metro logs for `[bridge]` lines.
+First launch shows the Expo dev client tutorial modal — tap "Continue" to dismiss. The app then auto-signs-up with `repro-${Date.now()}@example.com` and starts logging `[bridge]` lines to the metro console. The big colored banner at the top of the app reflects the bridge state in real time.
 
-## Toggle the fix
+## Run both versions to see the contrast
 
-One line in `package.json`:
+The repo defaults to vanilla `0.12.2` (broken). To see the fix, swap one line in `package.json`:
 
-```json
+```jsonc
 // broken (vanilla npm)
 "@convex-dev/better-auth": "0.12.2"
 
@@ -38,24 +46,35 @@ One line in `package.json`:
 "@convex-dev/better-auth": "file:./patches/convex-dev-better-auth-0.12.2.tgz"
 ```
 
-`npm install` after editing.
+After editing, do a clean install. Plain `npm install` won't swap because both sides advertise version `0.12.2` and npm thinks `node_modules` is already up to date:
+
+```bash
+trash node_modules package-lock.json && npm install
+# or: rm -rf node_modules package-lock.json && npm install
+# or: npm install --force
+```
+
+Then `npm run ios` again. The native binary doesn't need to rebuild (the change is JS-only) but the metro bundle picks up the new bridge code.
+
+To swap back, reverse the package.json edit and run the clean install again.
 
 ## Expected output
 
-**Broken** (vanilla `0.12.2`):
+**Broken** (vanilla `0.12.2`) — the banner stays red on `BRIDGE STUCK` after the session lands:
 ```
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": false, "useSession.isPending": true}
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": true,  "useSession.isPending": false}
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": false, "useSession.hasSession": true,  "useSession.isPending": false}
 ```
-`isAuthenticated` stuck at `false` even though the Better Auth session is live.
 
-**Fixed** (patched build):
+**Fixed** (patched build) — the banner flips to green `BRIDGE WORKING` once the session lands:
 ```
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": false, "useSession.isPending": true}
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": true,  "useSession.isPending": false}
 [bridge] {"useConvexAuth.isAuthenticated": true,  "useConvexAuth.isLoading": false, "useSession.hasSession": true,  "useSession.isPending": false}
 ```
+
+The `Sign in` and `Sign out` buttons in the app exercise the same code path so you can watch the banner cycle across all three transitions.
 
 ## Versions pinned
 
@@ -66,6 +85,8 @@ One line in `package.json`:
 - `convex` `^1.37.0`
 
 No `babel.config.js` overrides. No `expo-modules-core` or `expo-jsi` pin.
+
+`.npmrc` ships `legacy-peer-deps=true` so `npm install` accepts the canary prereleases against `@better-auth/expo`'s `expo-constants@">=17.0.0"` peer (npm semver excludes prereleases from normal ranges).
 
 ## Bisect (Hermes V1 plugin set vs `useConvexAuth.isAuthenticated`)
 
@@ -110,4 +131,4 @@ npm pack --pack-destination /path/to/this/repro/patches/
 
 ## License
 
-MIT
+MIT, by [Ramon Claudio](https://github.com/ramonclaudio).
