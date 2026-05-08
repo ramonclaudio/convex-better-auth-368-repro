@@ -94,9 +94,11 @@ Five other source-level shapes were tried in this repro and rejected:
 
 Only dropping `async` and wrapping the entire body in `new Promise(executor)` works. The Promise constructor's thenable-adoption microtask is the spec-defined point where scheduling fires deterministically across engines.
 
-## Rebuilding the patch
+## What the patch changes
 
-`patches/convex-dev-better-auth-0.12.2.tgz` is built from [`@ramonclaudio/convex-better-auth`](https://github.com/ramonclaudio/convex-better-auth) on branch `fix/react-bridge-hermes-async-race` (the source for PR #368).
+`patches/PR-368.patch` is the source diff (single file, `src/react/index.tsx`). Drops `async`, wraps the body in `new Promise(executor)`. Twenty-six insertions, twenty-two deletions.
+
+`patches/convex-dev-better-auth-0.12.2.tgz` is the built tarball from [`@ramonclaudio/convex-better-auth`](https://github.com/ramonclaudio/convex-better-auth) on branch `fix/react-bridge-hermes-async-race`. Rebuild:
 
 ```bash
 git clone https://github.com/ramonclaudio/convex-better-auth.git
