@@ -91,7 +91,7 @@ function Repro() {
     if (!isAuthenticated) {
       return {
         label: "BRIDGE STUCK",
-        sub: "Better Auth has a session but useConvexAuth never settles",
+        sub: "BA has a session but useConvexAuth never settles",
         bg: "#c0392b",
       };
     }
