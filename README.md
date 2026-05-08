@@ -8,7 +8,7 @@ Filed as [`get-convex/better-auth#368`](https://github.com/get-convex/better-aut
 
 | Vanilla `0.12.2` (broken) | Patched build (fixed) |
 |---|---|
-| ![broken](screenshots/broken.png) | ![fixed](screenshots/fixed.png) |
+| ![bridge stuck](screenshots/bridge-stuck.png) | ![bridge working](screenshots/bridge-working.png) |
 
 Same app, same Convex deployment, same Better Auth session. Only the `@convex-dev/better-auth` version in `package.json` differs.
 
