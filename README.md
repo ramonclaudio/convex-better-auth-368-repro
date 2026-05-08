@@ -1,8 +1,8 @@
 # convex-better-auth-368-repro
 
-Minimal Expo app that reproduces the `useConvexAuth().isAuthenticated` race in `@convex-dev/better-auth@0.12.2` on Expo SDK 56 canary.
+Reproduces the `useConvexAuth().isAuthenticated` race in `@convex-dev/better-auth@0.12.2` on Expo SDK 56 canary `2026-05-05+`.
 
-Filed as [`get-convex/better-auth#368`](https://github.com/get-convex/better-auth/pull/368). Root cause: [`expo/expo#45345`](https://github.com/expo/expo/pull/45345) dropped `@babel/plugin-transform-async-to-generator` from the Hermes V1 preset, which had been hiding a microtask race in the bridge's `fetchAccessToken`.
+Filed as [`get-convex/better-auth#368`](https://github.com/get-convex/better-auth/pull/368).
 
 ## What it looks like
 
@@ -14,11 +14,25 @@ Same app, same Convex deployment, same Better Auth session. Only the `@convex-de
 
 ## Symptom
 
-After any auth state change (sign in, sign up, sign out):
+Any auth state change (sign in, sign up, sign out) leaves the bridge stuck: `authClient.useSession()` reflects the new state and `/convex/token` returns a valid JWT, but `useConvexAuth().isAuthenticated` never settles and the websocket stays paused.
 
-- `authClient.useSession()` reflects the new state
-- `/convex/token` returns a valid JWT
-- `useConvexAuth().isAuthenticated` never settles, websocket stays paused
+## Why it happens
+
+An Expo update ([`expo/expo#45345`](https://github.com/expo/expo/pull/45345)) dropped an old Babel transform (`@babel/plugin-transform-async-to-generator`) from the Hermes V1 preset on May 5. The transform was quietly hiding a timing bug in the bridge: it forced async functions to wait one extra tick before resolving, which kept two back-to-back auth calls from racing. Without it, the second call lands while the first is still mid-flight, Convex sees a stale config version, and silently skips reconnecting the socket. Wrapping the function body in an explicit `new Promise(executor)` restores that one-tick delay, so the second call waits for the first to finish.
+
+The race, step by step:
+
+1. `fetchAccessToken` resolves with the JWT and calls `setCachedToken(token)`.
+2. The `/convex/token` response's `Set-Cookie` runs through Better Auth's fetch interceptor.
+3. That triggers a re-render. `sessionId` updates.
+4. The `[sessionId]` dep on `fetchAccessToken`'s `useCallback` rebuilds the function.
+5. `ConvexAuthStateFirstEffect` sees a new `fetchAccessToken` and calls `client.setAuth` a second time.
+6. Convex's `fetchTokenAndGuardAgainstRace` (`authentication_manager.ts`) bumps `configVersion` on entry. The original `await` from step 1 sees the stale value and returns `isFromOutdatedConfig: true`.
+7. `setConfig` bails without `resumeSocket()`. Chain repeats.
+
+Why the transform masked it: regenerator's `_asyncToGenerator` wraps the body in `new Promise(executor)`, and the constructor's `resolve(thenable)` schedules a `NewPromiseResolveThenableJob` microtask. Native async returning a thenable should do the same per the spec, but Hermes V1's native pipeline appears to elide it. With the hop in place the second `setAuth` lands after `setConfig` finishes. Without it, it lands during the await window.
+
+`pendingTokenRef` caching, `cachedToken` state, the catch/finally, and the `[sessionId]` dependency all stay. `AuthTokenFetcher` contract preserved.
 
 ## Run
 
@@ -32,9 +46,9 @@ npx convex dev      # one terminal, leave running
 npm run ios         # another terminal
 ```
 
-First launch shows the Expo dev client tutorial modal — tap "Continue" to dismiss. The app then auto-signs-up with `repro-${Date.now()}@example.com` and starts logging `[bridge]` lines to the metro console. The big colored banner at the top of the app reflects the bridge state in real time.
+First launch shows the Expo dev client tutorial. Tap "Continue" to dismiss. The app then auto-signs-up with `repro-${Date.now()}@example.com` and starts logging `[bridge]` lines to the metro console. The big colored banner reflects the bridge state in real time.
 
-## Run both versions to see the contrast
+## Toggle the fix
 
 The repo defaults to vanilla `0.12.2` (broken). To see the fix, swap one line in `package.json`:
 
@@ -46,35 +60,34 @@ The repo defaults to vanilla `0.12.2` (broken). To see the fix, swap one line in
 "@convex-dev/better-auth": "file:./patches/convex-dev-better-auth-0.12.2.tgz"
 ```
 
-After editing, do a clean install. Plain `npm install` won't swap because both sides advertise version `0.12.2` and npm thinks `node_modules` is already up to date:
+Do a clean install after editing. Plain `npm install` won't swap because both sides advertise version `0.12.2` and npm thinks `node_modules` is already up to date:
 
 ```bash
-trash node_modules package-lock.json && npm install
+npm install --force
 # or: rm -rf node_modules package-lock.json && npm install
-# or: npm install --force
 ```
 
-Then `npm run ios` again. The native binary doesn't need to rebuild (the change is JS-only) but the metro bundle picks up the new bridge code.
+Then `npm run ios` again. The native binary doesn't need to rebuild because the change is JS-only. Metro picks up the new bridge code on the next bundle.
 
 To swap back, reverse the package.json edit and run the clean install again.
 
 ## Expected output
 
-**Broken** (vanilla `0.12.2`) — the banner stays red on `BRIDGE STUCK` after the session lands:
+**Broken** (vanilla `0.12.2`): banner stays red on `BRIDGE STUCK` after the session lands.
 ```
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": false, "useSession.isPending": true}
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": true,  "useSession.isPending": false}
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": false, "useSession.hasSession": true,  "useSession.isPending": false}
 ```
 
-**Fixed** (patched build) — the banner flips to green `BRIDGE WORKING` once the session lands:
+**Fixed** (patched build): banner flips to green `BRIDGE WORKING` once the session lands.
 ```
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": false, "useSession.isPending": true}
 [bridge] {"useConvexAuth.isAuthenticated": false, "useConvexAuth.isLoading": true,  "useSession.hasSession": true,  "useSession.isPending": false}
 [bridge] {"useConvexAuth.isAuthenticated": true,  "useConvexAuth.isLoading": false, "useSession.hasSession": true,  "useSession.isPending": false}
 ```
 
-The `Sign in` and `Sign out` buttons in the app exercise the same code path so you can watch the banner cycle across all three transitions.
+The `Sign in` and `Sign out` buttons exercise the same code path so you can watch the banner cycle across all three transitions.
 
 ## Versions pinned
 
@@ -84,9 +97,7 @@ The `Sign in` and `Sign out` buttons in the app exercise the same code path so y
 - `better-auth` `1.6.9`, `@better-auth/expo` `1.6.9`
 - `convex` `^1.37.0`
 
-No `babel.config.js` overrides. No `expo-modules-core` or `expo-jsi` pin.
-
-`.npmrc` ships `legacy-peer-deps=true` so `npm install` accepts the canary prereleases against `@better-auth/expo`'s `expo-constants@">=17.0.0"` peer (npm semver excludes prereleases from normal ranges).
+No `babel.config.js` overrides. No `expo-modules-core` or `expo-jsi` pin. `.npmrc` ships `legacy-peer-deps=true` because npm semver excludes prereleases from normal ranges, so canary versions don't satisfy `@better-auth/expo`'s `expo-constants@">=17.0.0"` peer.
 
 ## Bisect (Hermes V1 plugin set vs `useConvexAuth.isAuthenticated`)
 
@@ -103,9 +114,9 @@ No `babel.config.js` overrides. No `expo-modules-core` or `expo-jsi` pin.
 
 The bridge file is the entire surface. Convex client and Better Auth client are unaffected.
 
-## Alternatives evaluated
+## Alternatives tried
 
-Five other source-level shapes were tried in this repro and rejected:
+Tried five other source-level shapes and none of them fix the bug on Hermes V1 native async:
 
 1. `useState(cachedToken)` → `useRef`. Drops one re-render trigger. Better Auth's `Set-Cookie` store update still triggers a render via `useSession` and races. Doesn't fix.
 2. `[sessionId]` → `[userId]` on `useCallback`. Doesn't rebuild on session rotation. First `setConfig` cycle still fails. Doesn't fix.
