@@ -1,10 +1,8 @@
 # convex-better-auth-368-repro
 
-Reproduces the `useConvexAuth().isAuthenticated` race in `@convex-dev/better-auth@0.12.2` on Expo SDK 56 canary `2026-05-05+`.
+Ran into an issue where `useConvexAuth().isAuthenticated` never flips to `true` after a successful sign-in. Reproduced on a fresh minimal Expo SDK 56 canary setup (`2026-05-05+`) with React `19.2.3` and React Native `0.85.3`. The Better Auth session lands cleanly, `authClient.useSession()` reflects the new state, and `/convex/token` returns a valid JWT, but `useConvexAuth().isAuthenticated` never settles and the websocket stays paused. Same thing on sign-up and sign-out, every auth state change leaves the bridge stuck.
 
-Filed as [`get-convex/better-auth#368`](https://github.com/get-convex/better-auth/pull/368).
-
-## What it looks like
+Filed the fix as [`get-convex/better-auth#368`](https://github.com/get-convex/better-auth/pull/368). This repo is the runnable repro: single Expo app, swap one line of `package.json` to flip between vanilla `0.12.2` (broken) and the patched build (fixed).
 
 | Vanilla `0.12.2` (broken) | Patched build (fixed) |
 |---|---|
@@ -12,13 +10,9 @@ Filed as [`get-convex/better-auth#368`](https://github.com/get-convex/better-aut
 
 Same app, same Convex deployment, same Better Auth session. Only the `@convex-dev/better-auth` version in `package.json` differs.
 
-## Symptom
-
-Any auth state change (sign in, sign up, sign out) leaves the bridge stuck: `authClient.useSession()` reflects the new state and `/convex/token` returns a valid JWT, but `useConvexAuth().isAuthenticated` never settles and the websocket stays paused.
-
 ## Why it happens
 
-An Expo update ([`expo/expo#45345`](https://github.com/expo/expo/pull/45345)) dropped an old Babel transform (`@babel/plugin-transform-async-to-generator`) from the Hermes V1 preset on May 5. The transform was quietly hiding a timing bug in the bridge: it forced async functions to wait one extra tick before resolving, which kept two back-to-back auth calls from racing. Without it, the second call lands while the first is still mid-flight, Convex sees a stale config version, and silently skips reconnecting the socket. Wrapping the function body in an explicit `new Promise(executor)` restores that one-tick delay, so the second call waits for the first to finish.
+Tracked the root cause to an Expo update ([`expo/expo#45345`](https://github.com/expo/expo/pull/45345)) that dropped an old Babel transform (`@babel/plugin-transform-async-to-generator`) from the Hermes V1 preset on May 5. The transform was quietly hiding a timing bug in the bridge: it forced async functions to wait one extra tick before resolving, which kept two back-to-back auth calls from racing. Without it, the second call lands while the first is still mid-flight, Convex sees a stale config version, and silently skips reconnecting the socket. Wrapping the function body in an explicit `new Promise(executor)` restores that one-tick delay, so the second call waits for the first to finish.
 
 The race, step by step:
 
