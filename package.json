@@ -1,0 +1,36 @@
+{
+  "name": "convex-better-auth-368-repro",
+  "main": "expo/AppEntry",
+  "version": "1.0.0",
+  "description": "Minimal Expo SDK 56 canary repro for the @convex-dev/better-auth bridge race fixed by PR #368.",
+  "author": "Ramon Claudio <hello@ramonclaudio.com> (https://github.com/ramonclaudio)",
+  "license": "MIT",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "ios": "expo run:ios",
+    "convex": "convex dev"
+  },
+  "dependencies": {
+    "@better-auth/expo": "1.6.9",
+    "@convex-dev/better-auth": "0.12.2",
+    "better-auth": "1.6.9",
+    "convex": "^1.37.0",
+    "expo": "56.0.0-canary-20260506-03817f5",
+    "expo-constants": "56.0.0-canary-20260506-03817f5",
+    "expo-dev-client": "56.0.0-canary-20260506-03817f5",
+    "expo-linking": "56.0.0-canary-20260506-03817f5",
+    "expo-network": "56.0.0-canary-20260506-03817f5",
+    "expo-secure-store": "56.0.0-canary-20260506-03817f5",
+    "react": "19.2.3",
+    "react-native": "0.85.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true,
+  "overrides": {
+    "react": "19.2.3",
+    "@types/react": "~19.1.0"
+  }
+}
