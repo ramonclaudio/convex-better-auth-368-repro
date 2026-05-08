@@ -136,4 +136,4 @@ npm pack --pack-destination /path/to/this/repro/patches/
 
 ## License
 
-MIT, by [Ramon Claudio](https://github.com/ramonclaudio).
+MIT.
