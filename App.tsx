@@ -82,9 +82,35 @@ function Repro() {
     }
   };
 
+  const bridgeState = (() => {
+    if (isPending || isLoading) {
+      return { label: "INITIALIZING", sub: "Waiting for session and token", bg: "#888" };
+    }
+    if (!session?.session) {
+      return { label: "SIGNED OUT", sub: "No active session", bg: "#666" };
+    }
+    if (!isAuthenticated) {
+      return {
+        label: "BRIDGE STUCK",
+        sub: "Better Auth has a session but useConvexAuth never settles. Bug repros.",
+        bg: "#c0392b",
+      };
+    }
+    return {
+      label: "BRIDGE WORKING",
+      sub: "Session and Convex auth both live. Fix applied.",
+      bg: "#27ae60",
+    };
+  })();
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Convex + Better Auth bridge race repro</Text>
+
+      <View style={[styles.banner, { backgroundColor: bridgeState.bg }]}>
+        <Text style={styles.bannerLabel}>{bridgeState.label}</Text>
+        <Text style={styles.bannerSub}>{bridgeState.sub}</Text>
+      </View>
 
       <View style={styles.box}>
         <Text style={styles.h2}>useConvexAuth</Text>
@@ -167,6 +193,9 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { padding: 24, paddingTop: 80, gap: 16, backgroundColor: "#fff" },
   title: { fontSize: 22, fontWeight: "700" },
+  banner: { padding: 16, borderRadius: 10, gap: 4 },
+  bannerLabel: { color: "#fff", fontSize: 20, fontWeight: "800", letterSpacing: 0.5 },
+  bannerSub: { color: "#fff", fontSize: 13, opacity: 0.9 },
   h2: { fontSize: 16, fontWeight: "600", marginBottom: 8 },
   box: { padding: 12, borderWidth: 1, borderColor: "#ddd", borderRadius: 8, gap: 4 },
   row: { fontSize: 14, fontFamily: "Menlo" },
